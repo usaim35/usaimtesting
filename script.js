@@ -11,6 +11,12 @@ let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
 let chart;
 let pieChart;
 let lastDeleted = null; // For undo feature
+let pinnedIds = JSON.parse(localStorage.getItem("pinnedIds")) || [];
+let selectedIds = new Set();
+let showColumns = {
+  name: true, bank: true, amount: true, type: true, userType: true, status: true, time: true, action: true
+};
+let filterType = "all"; // "all", "debited", "credited"
 
 // Confetti Animation
 function showConfetti() {
@@ -131,6 +137,7 @@ smsForm.addEventListener("submit", (e) => {
     userType,
     status: getRandomStatus(),
     time: new Date().toLocaleString(),
+    pinned: false
   };
 
   transactions.push(newTransaction);
@@ -174,25 +181,162 @@ function saveTransactions() {
 // Render transaction logs
 function renderLogs(filter = "") {
   logTableBody.innerHTML = "";
-  const filtered = transactions.filter(tx =>
-    tx.name.toLowerCase().includes(filter.toLowerCase())
-  );
+  let filtered = transactions
+    .filter(tx => tx.name.toLowerCase().includes(filter.toLowerCase()))
+    .filter(tx => filterType === "all" ? true : tx.type === filterType);
+
+  // Pinned transactions first
+  filtered = [
+    ...filtered.filter(tx => pinnedIds.includes(tx.id)),
+    ...filtered.filter(tx => !pinnedIds.includes(tx.id))
+  ];
+
   filtered.forEach(tx => {
     const tr = document.createElement("tr");
+    tr.className = tx.pinned ? "table-info" : "";
     tr.innerHTML = `
-      <td>${tx.name}</td>
-      <td>${tx.bank}</td>
-      <td>${tx.amount}</td>
-      <td>${tx.type}</td>
-      <td>${tx.userType}</td>
-      <td><span class="badge ${getBadgeClass(tx.status)}">${tx.status}</span></td>
-      <td>${tx.time}</td>
       <td>
-        <button class="delete-btn" onclick="deleteTransaction(${tx.id})">Delete</button>
+        <input type="checkbox" class="select-row" data-id="${tx.id}" ${selectedIds.has(tx.id) ? "checked" : ""}>
+        ${showColumns.name ? tx.name : ""}
+        ${pinnedIds.includes(tx.id) ? ' <span title="Pinned">📌</span>' : ""}
       </td>
+      ${showColumns.bank ? `<td>${tx.bank}</td>` : ""}
+      ${showColumns.amount ? `<td>${tx.amount}</td>` : ""}
+      ${showColumns.type ? `<td>${tx.type}</td>` : ""}
+      ${showColumns.userType ? `<td>${tx.userType}</td>` : ""}
+      ${showColumns.status ? `<td><span class="badge ${getBadgeClass(tx.status)}">${tx.status}</span></td>` : ""}
+      ${showColumns.time ? `<td>${tx.time}</td>` : ""}
+      ${showColumns.action ? `<td>
+        <button class="btn btn-sm btn-outline-primary me-1" onclick="editTransaction(${tx.id})">✏️</button>
+        <button class="btn btn-sm btn-outline-warning me-1" onclick="pinTransaction(${tx.id})">${pinnedIds.includes(tx.id) ? "Unpin" : "Pin"}</button>
+        <button class="delete-btn" onclick="deleteTransaction(${tx.id})">Delete</button>
+        <button class="btn btn-sm btn-outline-info ms-1" onclick="showDetails(${tx.id})">Details</button>
+      </td>` : ""}
     `;
+    tr.onclick = (e) => {
+      if (e.target.classList.contains("select-row")) return;
+      showDetails(tx.id);
+    };
     logTableBody.appendChild(tr);
   });
+
+  // Checkbox listeners for bulk delete
+  document.querySelectorAll(".select-row").forEach(cb => {
+    cb.addEventListener("change", function() {
+      const id = Number(this.dataset.id);
+      if (this.checked) selectedIds.add(id);
+      else selectedIds.delete(id);
+    });
+  });
+}
+
+// Edit Transaction In-Place
+function editTransaction(id) {
+  const tx = transactions.find(t => t.id === id);
+  if (!tx) return;
+  const name = prompt("Edit Name:", tx.name);
+  if (name === null) return;
+  const bank = prompt("Edit Bank:", tx.bank);
+  if (bank === null) return;
+  const amount = prompt("Edit Amount:", tx.amount);
+  if (amount === null || isNaN(amount)) return;
+  tx.name = name;
+  tx.bank = bank;
+  tx.amount = parseFloat(amount);
+  saveTransactions();
+  renderLogs(searchInput.value);
+  updateSummary();
+  updateChart();
+}
+
+// Pin/Favorite Transaction
+function pinTransaction(id) {
+  if (pinnedIds.includes(id)) {
+    pinnedIds = pinnedIds.filter(pid => pid !== id);
+  } else {
+    pinnedIds.push(id);
+  }
+  localStorage.setItem("pinnedIds", JSON.stringify(pinnedIds));
+  renderLogs(searchInput.value);
+}
+
+// Filter by Transaction Type
+function setFilterType(type) {
+  filterType = type;
+  renderLogs(searchInput.value);
+}
+
+// Show/Hide Columns
+function toggleColumn(col) {
+  showColumns[col] = !showColumns[col];
+  renderLogs(searchInput.value);
+}
+
+// Bulk Delete
+function bulkDelete() {
+  if (selectedIds.size === 0) return alert("No transactions selected.");
+  if (!confirm("Delete selected transactions?")) return;
+  transactions = transactions.filter(tx => !selectedIds.has(tx.id));
+  selectedIds.clear();
+  saveTransactions();
+  renderLogs(searchInput.value);
+  updateSummary();
+  updateChart();
+}
+
+// Transaction Details Modal
+function showDetails(id) {
+  const tx = transactions.find(t => t.id === id);
+  if (!tx) return;
+  let modal = document.getElementById("detailsModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.className = "modal fade";
+    modal.id = "detailsModal";
+    modal.tabIndex = -1;
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center p-4">
+          <div class="modal-header">
+            <h5 class="modal-title">Transaction Details</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="detailsBody"></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+  document.getElementById("detailsBody").innerHTML = `
+    <div><b>Name:</b> ${tx.name}</div>
+    <div><b>Bank:</b> ${tx.bank}</div>
+    <div><b>Amount:</b> ₹${tx.amount}</div>
+    <div><b>Type:</b> ${tx.type}</div>
+    <div><b>User Type:</b> ${tx.userType}</div>
+    <div><b>Status:</b> ${tx.status}</div>
+    <div><b>Time:</b> ${tx.time}</div>
+    <div><b>Pinned:</b> ${pinnedIds.includes(tx.id) ? "Yes" : "No"}</div>
+  `;
+  new bootstrap.Modal(modal).show();
+}
+
+// Animated Counter for Summary Cards
+function animateCounter(id, end) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let start = 0;
+  const duration = 600;
+  const step = Math.ceil(end / (duration / 16));
+  function update() {
+    start += step;
+    if (start >= end) {
+      el.textContent = end.toFixed(2);
+      return;
+    }
+    el.textContent = start.toFixed(2);
+    requestAnimationFrame(update);
+  }
+  update();
 }
 
 // Delete a transaction (with undo support)
@@ -206,6 +350,9 @@ function deleteTransaction(id) {
   // Show undo button if present
   const undoBtn = document.getElementById("undoBtn");
   if (undoBtn) undoBtn.style.display = "inline-block";
+  // Sound/vibration feedback
+  playDeleteSound();
+  if (window.navigator.vibrate) window.navigator.vibrate(80);
 }
 
 // Undo last delete
@@ -237,8 +384,8 @@ function clearLogs() {
 function updateSummary() {
   const debited = transactions.filter(tx => tx.type === "debited").reduce((a, b) => a + b.amount, 0);
   const credited = transactions.filter(tx => tx.type === "credited").reduce((a, b) => a + b.amount, 0);
-  if (totalDebited) totalDebited.textContent = debited.toFixed(2);
-  if (totalCredited) totalCredited.textContent = credited.toFixed(2);
+  if (totalDebited) animateCounter("totalDebited", debited);
+  if (totalCredited) animateCounter("totalCredited", credited);
 
   // Total transaction count
   if (document.getElementById("totalCount")) {
@@ -337,6 +484,51 @@ function exportToCSV() {
   });
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   saveAs(blob, "transactions.csv");
+}
+
+// Export as PDF (requires jsPDF library in HTML)
+function exportToPDF() {
+  if (typeof jsPDF === "undefined") {
+    alert("jsPDF library not loaded!");
+    return;
+  }
+  const doc = new jsPDF();
+  doc.text("Transaction Logs", 10, 10);
+  let y = 20;
+  transactions.forEach(tx => {
+    doc.text(
+      `Name: ${tx.name}, Bank: ${tx.bank}, Amount: ${tx.amount}, Type: ${tx.type}, User: ${tx.userType}, Status: ${tx.status}, Time: ${tx.time}`,
+      10, y
+    );
+    y += 8;
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
+  });
+  doc.save("transactions.pdf");
+}
+
+// Keyboard Shortcuts
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.key.toLowerCase() === "f") {
+    e.preventDefault();
+    searchInput.focus();
+  }
+  if (e.ctrlKey && e.key.toLowerCase() === "n") {
+    e.preventDefault();
+    document.getElementById("customerName").focus();
+  }
+  if (e.ctrlKey && e.key.toLowerCase() === "b") {
+    e.preventDefault();
+    bulkDelete();
+  }
+});
+
+// Sound/Vibration Feedback for Delete
+function playDeleteSound() {
+  const audio = new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_115b9bfae3.mp3");
+  audio.play();
 }
 
 // Initialize on load
