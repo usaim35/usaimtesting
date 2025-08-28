@@ -1,3 +1,6 @@
+// === SMS Campaign Pro Main Script ===
+
+// DOM Elements
 const smsForm = document.getElementById("smsForm");
 const smsPreview = document.getElementById("smsPreview");
 const logTableBody = document.getElementById("logTableBody");
@@ -7,18 +10,18 @@ const totalCredited = document.getElementById("totalCredited");
 const transactionChartCanvas = document.getElementById("transactionChart");
 const toast = new bootstrap.Toast(document.getElementById("toast"));
 
+// State
 let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
-let chart;
-let pieChart;
-let lastDeleted = null; // For undo feature
+let chart, pieChart;
+let lastDeleted = null;
 let pinnedIds = JSON.parse(localStorage.getItem("pinnedIds")) || [];
 let selectedIds = new Set();
 let showColumns = {
   name: true, bank: true, amount: true, type: true, userType: true, status: true, time: true, action: true
 };
-let filterType = "all"; // "all", "debited", "credited"
+let filterType = "all";
 
-// Confetti Animation
+// --- Confetti Animation ---
 function showConfetti() {
   const canvas = document.getElementById("confettiCanvas");
   canvas.width = window.innerWidth;
@@ -32,16 +35,14 @@ function showConfetti() {
       y: Math.random() * canvas.height - canvas.height,
       r: Math.random() * 6 + 4,
       d: Math.random() * 50 + 10,
-      color: `hsl(${Math.random() * 360},100%,50%)`,
-      tilt: Math.random() * 10 - 10
+      color: `hsl(${Math.random() * 360},100%,50%)`
     });
   }
   let angle = 0;
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     angle += 0.01;
-    for (let i = 0; i < confetti.length; i++) {
-      let c = confetti[i];
+    for (let c of confetti) {
       ctx.beginPath();
       ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2, false);
       ctx.fillStyle = c.color;
@@ -59,7 +60,7 @@ function showConfetti() {
   setTimeout(() => { canvas.style.display = "none"; }, 1500);
 }
 
-// Pie Chart
+// --- Pie Chart ---
 function initPieChart() {
   pieChart = new Chart(document.getElementById("pieChart"), {
     type: "pie",
@@ -71,14 +72,11 @@ function initPieChart() {
       }]
     },
     options: {
-      plugins: {
-        legend: { position: "bottom" }
-      }
+      plugins: { legend: { position: "bottom" } }
     }
   });
   updatePieChart();
 }
-
 function updatePieChart() {
   const debited = transactions.filter(tx => tx.type === "debited").length;
   const credited = transactions.filter(tx => tx.type === "credited").length;
@@ -88,14 +86,13 @@ function updatePieChart() {
   }
 }
 
-// Update theme icon
+// --- Theme Toggle ---
 function toggleTheme() {
   document.body.classList.toggle("dark-mode");
   const isDark = document.body.classList.contains("dark-mode");
   localStorage.setItem("theme", isDark ? "dark" : "light");
   document.getElementById("themeIcon").textContent = isDark ? "🌙" : "☀️";
 }
-
 function applyThemeFromStorage() {
   const theme = localStorage.getItem("theme");
   if (theme === "dark") {
@@ -107,16 +104,15 @@ function applyThemeFromStorage() {
   }
 }
 
-// Utility to generate random status (simulating delivery)
+// --- Utility ---
 const getRandomStatus = () => {
   const statuses = ["Delivered", "Pending", "Failed"];
   return statuses[Math.floor(Math.random() * statuses.length)];
 };
 
-// Handle SMS Form Submission
+// --- Form Submission ---
 smsForm.addEventListener("submit", (e) => {
   e.preventDefault();
-
   const name = document.getElementById("customerName").value.trim();
   const bank = document.getElementById("bankName").value.trim();
   const amount = parseFloat(document.getElementById("amount").value);
@@ -147,7 +143,7 @@ smsForm.addEventListener("submit", (e) => {
   updateChart();
   showSMSPreview(newTransaction);
 
-  // --- Auto-download as .txt file (Notepad) ---
+  // Auto-download as .txt file
   const txtContent =
     `Name: ${newTransaction.name}\n` +
     `Bank: ${newTransaction.bank}\n` +
@@ -156,7 +152,6 @@ smsForm.addEventListener("submit", (e) => {
     `User Type: ${newTransaction.userType}\n` +
     `Status: ${newTransaction.status}\n` +
     `Time: ${newTransaction.time}\n`;
-
   const blob = new Blob([txtContent], { type: "text/plain" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -168,17 +163,14 @@ smsForm.addEventListener("submit", (e) => {
   toast.show();
   showConfetti();
   document.getElementById("smsSound").play();
-
   smsForm.reset();
 });
 
-// Save transactions and update pie chart
+// --- Save & Render ---
 function saveTransactions() {
   localStorage.setItem("transactions", JSON.stringify(transactions));
   updatePieChart();
 }
-
-// Render transaction logs
 function renderLogs(filter = "") {
   logTableBody.innerHTML = "";
   let filtered = transactions
@@ -230,7 +222,7 @@ function renderLogs(filter = "") {
   });
 }
 
-// Edit Transaction In-Place
+// --- Edit Transaction ---
 function editTransaction(id) {
   const tx = transactions.find(t => t.id === id);
   if (!tx) return;
@@ -249,7 +241,7 @@ function editTransaction(id) {
   updateChart();
 }
 
-// Pin/Favorite Transaction
+// --- Pin/Favorite Transaction ---
 function pinTransaction(id) {
   if (pinnedIds.includes(id)) {
     pinnedIds = pinnedIds.filter(pid => pid !== id);
@@ -260,19 +252,19 @@ function pinTransaction(id) {
   renderLogs(searchInput.value);
 }
 
-// Filter by Transaction Type
+// --- Filter by Transaction Type ---
 function setFilterType(type) {
   filterType = type;
   renderLogs(searchInput.value);
 }
 
-// Show/Hide Columns
+// --- Show/Hide Columns ---
 function toggleColumn(col) {
   showColumns[col] = !showColumns[col];
   renderLogs(searchInput.value);
 }
 
-// Bulk Delete
+// --- Bulk Delete ---
 function bulkDelete() {
   if (selectedIds.size === 0) return alert("No transactions selected.");
   if (!confirm("Delete selected transactions?")) return;
@@ -284,7 +276,7 @@ function bulkDelete() {
   updateChart();
 }
 
-// Transaction Details Modal
+// --- Transaction Details Modal ---
 function showDetails(id) {
   const tx = transactions.find(t => t.id === id);
   if (!tx) return;
@@ -320,7 +312,7 @@ function showDetails(id) {
   new bootstrap.Modal(modal).show();
 }
 
-// Animated Counter for Summary Cards
+// --- Animated Counter for Summary Cards ---
 function animateCounter(id, end) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -339,7 +331,7 @@ function animateCounter(id, end) {
   update();
 }
 
-// Delete a transaction (with undo support)
+// --- Delete a transaction (with undo support) ---
 function deleteTransaction(id) {
   lastDeleted = transactions.find(tx => tx.id === id);
   transactions = transactions.filter(tx => tx.id !== id);
@@ -347,15 +339,13 @@ function deleteTransaction(id) {
   renderLogs(searchInput.value);
   updateSummary();
   updateChart();
-  // Show undo button if present
   const undoBtn = document.getElementById("undoBtn");
   if (undoBtn) undoBtn.style.display = "inline-block";
-  // Sound/vibration feedback
   playDeleteSound();
   if (window.navigator.vibrate) window.navigator.vibrate(80);
 }
 
-// Undo last delete
+// --- Undo last delete ---
 function undoDelete() {
   if (lastDeleted) {
     transactions.push(lastDeleted);
@@ -369,7 +359,7 @@ function undoDelete() {
   }
 }
 
-// Clear all logs
+// --- Clear all logs ---
 function clearLogs() {
   if (confirm("Are you sure you want to clear all logs?")) {
     transactions = [];
@@ -380,19 +370,16 @@ function clearLogs() {
   }
 }
 
-// Update summary cards
+// --- Update summary cards ---
 function updateSummary() {
   const debited = transactions.filter(tx => tx.type === "debited").reduce((a, b) => a + b.amount, 0);
   const credited = transactions.filter(tx => tx.type === "credited").reduce((a, b) => a + b.amount, 0);
   if (totalDebited) animateCounter("totalDebited", debited);
   if (totalCredited) animateCounter("totalCredited", credited);
-
-  // Total transaction count
   if (document.getElementById("totalCount")) {
     document.getElementById("totalCount").textContent = transactions.length;
   }
-
-  // Animated progress bar (debited vs credited)
+  // Animated progress bar
   const debitedCount = transactions.filter(tx => tx.type === "debited").length;
   const creditedCount = transactions.filter(tx => tx.type === "credited").length;
   const total = debitedCount + creditedCount;
@@ -406,7 +393,7 @@ function updateSummary() {
   }
 }
 
-// Show SMS preview
+// --- Show SMS preview ---
 function showSMSPreview(tx) {
   smsPreview.innerHTML = `
     <div>
@@ -420,7 +407,7 @@ function showSMSPreview(tx) {
   setTimeout(() => smsPreview.classList.remove("animate"), 500);
 }
 
-// Copy SMS preview to clipboard
+// --- Copy SMS preview to clipboard ---
 function copyPreview() {
   const temp = document.createElement("textarea");
   temp.value = smsPreview.innerText;
@@ -428,15 +415,14 @@ function copyPreview() {
   temp.select();
   document.execCommand("copy");
   document.body.removeChild(temp);
-  // Optionally show a toast or alert here
 }
 
-// Search input event
+// --- Search input event ---
 searchInput.addEventListener("input", () => {
   renderLogs(searchInput.value);
 });
 
-// Chart.js Bar Chart (example)
+// --- Chart.js Bar Chart ---
 function initChart() {
   if (!transactionChartCanvas) return;
   chart = new Chart(transactionChartCanvas, {
@@ -450,17 +436,12 @@ function initChart() {
       }]
     },
     options: {
-      plugins: {
-        legend: { display: false }
-      },
-      scales: {
-        y: { beginAtZero: true }
-      }
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
     }
   });
   updateChart();
 }
-
 function updateChart() {
   if (!chart) return;
   const debited = transactions.filter(tx => tx.type === "debited").reduce((a, b) => a + b.amount, 0);
@@ -469,14 +450,14 @@ function updateChart() {
   chart.update();
 }
 
-// Helper to determine badge color
+// --- Helper to determine badge color ---
 function getBadgeClass(status) {
   if (status === "Delivered") return "badge-delivered";
   if (status === "Pending") return "badge-pending";
   return "badge-failed";
 }
 
-// CSV Export
+// --- CSV Export ---
 function exportToCSV() {
   let csv = "Name,Bank,Amount,Type,UserType,Status,Time\n";
   transactions.forEach(tx => {
@@ -486,7 +467,7 @@ function exportToCSV() {
   saveAs(blob, "transactions.csv");
 }
 
-// Export as PDF (requires jsPDF library in HTML)
+// --- Export as PDF (requires jsPDF) ---
 function exportToPDF() {
   if (typeof jsPDF === "undefined") {
     alert("jsPDF library not loaded!");
@@ -509,7 +490,7 @@ function exportToPDF() {
   doc.save("transactions.pdf");
 }
 
-// Keyboard Shortcuts
+// --- Keyboard Shortcuts ---
 document.addEventListener("keydown", (e) => {
   if (e.ctrlKey && e.key.toLowerCase() === "f") {
     e.preventDefault();
@@ -525,13 +506,13 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// Sound/Vibration Feedback for Delete
+// --- Sound/Vibration Feedback for Delete ---
 function playDeleteSound() {
   const audio = new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_115b9bfae3.mp3");
   audio.play();
 }
 
-// Initialize on load
+// --- Initialize on load ---
 window.addEventListener("load", () => {
   applyThemeFromStorage();
   renderLogs();
