@@ -154,34 +154,33 @@
               <div class="step" id="step3"><span class="circle">3</span>Success</div>
             </div>
             <form id="smsForm" autocomplete="off">
-              <!-- 1. Floating Labels -->
-              <div class="form-floating mb-2">
-                <input type="text" class="form-control" id="customerName" placeholder=" " required />
-                <label for="customerName">Customer Name</label>
+              <div class="mb-2">
+                <label for="customerName" class="form-label">Customer Name</label>
+                <input type="text" class="form-control form-control-sm" id="customerName" required />
               </div>
-              <div class="form-floating mb-2">
-                <input type="text" class="form-control" id="bankName" placeholder=" " required />
-                <label for="bankName">Bank Name</label>
+              <div class="mb-2">
+                <label for="bankName" class="form-label">Bank Name</label>
+                <input type="text" class="form-control form-control-sm" id="bankName" required />
               </div>
-              <div class="form-floating mb-2">
-                <input type="number" class="form-control" id="amount" placeholder=" " min="1" required />
-                <label for="amount">Amount</label>
+              <div class="mb-2">
+                <label for="amount" class="form-label">Amount</label>
+                <input type="number" class="form-control form-control-sm" id="amount" min="1" required />
               </div>
-              <div class="form-floating mb-2">
-                <select class="form-select" id="transactionType" required>
+              <div class="mb-2">
+                <label for="transactionType" class="form-label">Transaction Type</label>
+                <select class="form-select form-select-sm" id="transactionType" required>
                   <option value="" selected disabled>Select</option>
                   <option value="debited">Debited</option>
                   <option value="credited">Credited</option>
                 </select>
-                <label for="transactionType">Transaction Type</label>
               </div>
-              <div class="form-floating mb-3">
-                <select class="form-select" id="userType" required>
+              <div class="mb-3">
+                <label for="userType" class="form-label">User Type</label>
+                <select class="form-select form-select-sm" id="userType" required>
                   <option value="" selected disabled>Select</option>
                   <option value="Personal">Personal</option>
                   <option value="Business">Business</option>
                 </select>
-                <label for="userType">User Type</label>
               </div>
               <!-- 3. Animated Glowing Send Button with Spinner -->
               <button type="submit" class="btn glow-btn w-100" id="sendBtn">
