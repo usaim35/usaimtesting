@@ -1,4 +1,6 @@
-// === SMS Campaign Pro Main Script ===
+import * as storage from './storage.js';
+import { initCharts, updateCharts } from './charts.js';
+import { showConfetti, showSpinner, showToast, animateSMSPreview, applyI18n, suggestSMS, pushUndo, popUndo } from './ui.js';
 
 // DOM Elements
 const smsForm = document.getElementById("smsForm");
@@ -8,93 +10,30 @@ const searchInput = document.getElementById("searchInput");
 const totalDebited = document.getElementById("totalDebited");
 const totalCredited = document.getElementById("totalCredited");
 const transactionChartCanvas = document.getElementById("transactionChart");
-const toast = new bootstrap.Toast(document.getElementById("toast"));
+const pieChartCanvas = document.getElementById("pieChart");
+const langSelect = document.getElementById("langSelect");
 
 // State
-let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
-let chart, pieChart;
-let lastDeleted = null;
-let pinnedIds = JSON.parse(localStorage.getItem("pinnedIds")) || [];
+let transactions = storage.getTransactions();
+let pinnedIds = storage.getPinnedIds();
 let selectedIds = new Set();
 let showColumns = {
   name: true, bank: true, amount: true, type: true, userType: true, status: true, time: true, action: true
 };
 let filterType = "all";
-
-// --- Confetti Animation ---
-function showConfetti() {
-  const canvas = document.getElementById("confettiCanvas");
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  canvas.style.display = "block";
-  const ctx = canvas.getContext("2d");
-  let confetti = [];
-  for (let i = 0; i < 150; i++) {
-    confetti.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height - canvas.height,
-      r: Math.random() * 6 + 4,
-      d: Math.random() * 50 + 10,
-      color: `hsl(${Math.random() * 360},100%,50%)`
-    });
-  }
-  let angle = 0;
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    angle += 0.01;
-    for (let c of confetti) {
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2, false);
-      ctx.fillStyle = c.color;
-      ctx.fill();
-      c.y += Math.cos(angle + c.d) + 1 + c.r / 2;
-      c.x += Math.sin(angle) * 2;
-      if (c.y > canvas.height) {
-        c.x = Math.random() * canvas.width;
-        c.y = -10;
-      }
-    }
-    requestAnimationFrame(draw);
-  }
-  draw();
-  setTimeout(() => { canvas.style.display = "none"; }, 1500);
-}
-
-// --- Pie Chart ---
-function initPieChart() {
-  pieChart = new Chart(document.getElementById("pieChart"), {
-    type: "pie",
-    data: {
-      labels: ["Debited", "Credited"],
-      datasets: [{
-        data: [0, 0],
-        backgroundColor: ["#dc3545", "#28a745"]
-      }]
-    },
-    options: {
-      plugins: { legend: { position: "bottom" } }
-    }
-  });
-  updatePieChart();
-}
-function updatePieChart() {
-  const debited = transactions.filter(tx => tx.type === "debited").length;
-  const credited = transactions.filter(tx => tx.type === "credited").length;
-  if (pieChart) {
-    pieChart.data.datasets[0].data = [debited, credited];
-    pieChart.update();
-  }
-}
+let lastDeleted = null;
 
 // --- Theme Toggle ---
 function toggleTheme() {
   document.body.classList.toggle("dark-mode");
   const isDark = document.body.classList.contains("dark-mode");
-  localStorage.setItem("theme", isDark ? "dark" : "light");
+  storage.saveTheme(isDark ? "dark" : "light");
   document.getElementById("themeIcon").textContent = isDark ? "🌙" : "☀️";
 }
+window.toggleTheme = toggleTheme;
+
 function applyThemeFromStorage() {
-  const theme = localStorage.getItem("theme");
+  const theme = storage.getTheme();
   if (theme === "dark") {
     document.body.classList.add("dark-mode");
     document.getElementById("themeIcon").textContent = "🌙";
@@ -104,11 +43,28 @@ function applyThemeFromStorage() {
   }
 }
 
-// --- Utility ---
-const getRandomStatus = () => {
-  const statuses = ["Delivered", "Pending", "Failed"];
-  return statuses[Math.floor(Math.random() * statuses.length)];
+// --- SMS Templates ---
+function loadTemplates() {
+  const sel = document.getElementById("smsTemplate");
+  sel.innerHTML = "";
+  storage.getTemplates().forEach((tpl, i) => {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = tpl;
+    sel.appendChild(opt);
+  });
+}
+window.applyTemplate = function(index) {
+  const tpl = storage.getTemplates()[index];
+  const name = document.getElementById("customerName").value || "Customer";
+  const bank = document.getElementById("bankName").value || "Bank";
+  const amount = document.getElementById("amount").value || "0";
+  const type = document.getElementById("transactionType").value || "debited";
+  const msg = tpl.replace("{name}", name).replace("{bank}", bank).replace("{amount}", amount).replace("{type}", type);
+  smsPreview.textContent = msg;
+  animateSMSPreview();
 };
+window.suggestSMS = suggestSMS;
 
 // --- Form Submission ---
 smsForm.addEventListener("submit", (e) => {
@@ -120,7 +76,7 @@ smsForm.addEventListener("submit", (e) => {
   const userType = document.getElementById("userType").value;
 
   if (!name || !bank || isNaN(amount) || !type) {
-    alert("Please fill all fields correctly.");
+    showToast("Please fill all fields correctly.", false);
     return;
   }
 
@@ -133,14 +89,16 @@ smsForm.addEventListener("submit", (e) => {
     userType,
     status: getRandomStatus(),
     time: new Date().toLocaleString(),
-    pinned: false
+    pinned: false,
+    tags: []
   };
 
+  pushUndo(transactions);
   transactions.push(newTransaction);
-  saveTransactions();
+  storage.saveTransactions(transactions);
   renderLogs(searchInput.value);
   updateSummary();
-  updateChart();
+  updateCharts(transactions);
   showSMSPreview(newTransaction);
 
   // Auto-download as .txt file
@@ -160,22 +118,31 @@ smsForm.addEventListener("submit", (e) => {
   a.click();
   document.body.removeChild(a);
 
-  toast.show();
+  showToast("SMS Sent Successfully!");
   showConfetti();
   document.getElementById("smsSound").play();
   smsForm.reset();
 });
 
-// --- Save & Render ---
-function saveTransactions() {
-  localStorage.setItem("transactions", JSON.stringify(transactions));
-  updatePieChart();
+// --- Utility ---
+function getRandomStatus() {
+  const statuses = ["Delivered", "Pending", "Failed"];
+  return statuses[Math.floor(Math.random() * statuses.length)];
 }
-function renderLogs(filter = "") {
+
+// --- Save & Render ---
+function renderLogs(filter = "", fromDate, toDate) {
   logTableBody.innerHTML = "";
   let filtered = transactions
     .filter(tx => tx.name.toLowerCase().includes(filter.toLowerCase()))
     .filter(tx => filterType === "all" ? true : tx.type === filterType);
+
+  if (fromDate && toDate) {
+    filtered = filtered.filter(tx => {
+      const txDate = new Date(tx.time);
+      return txDate >= fromDate && txDate <= toDate;
+    });
+  }
 
   // Pinned transactions first
   filtered = [
@@ -223,7 +190,7 @@ function renderLogs(filter = "") {
 }
 
 // --- Edit Transaction ---
-function editTransaction(id) {
+window.editTransaction = function(id) {
   const tx = transactions.find(t => t.id === id);
   if (!tx) return;
   const name = prompt("Edit Name:", tx.name);
@@ -235,49 +202,50 @@ function editTransaction(id) {
   tx.name = name;
   tx.bank = bank;
   tx.amount = parseFloat(amount);
-  saveTransactions();
+  storage.saveTransactions(transactions);
   renderLogs(searchInput.value);
   updateSummary();
-  updateChart();
-}
+  updateCharts(transactions);
+};
 
 // --- Pin/Favorite Transaction ---
-function pinTransaction(id) {
+window.pinTransaction = function(id) {
   if (pinnedIds.includes(id)) {
     pinnedIds = pinnedIds.filter(pid => pid !== id);
   } else {
     pinnedIds.push(id);
   }
-  localStorage.setItem("pinnedIds", JSON.stringify(pinnedIds));
+  storage.savePinnedIds(pinnedIds);
   renderLogs(searchInput.value);
-}
+};
 
 // --- Filter by Transaction Type ---
-function setFilterType(type) {
+window.setFilterType = function(type) {
   filterType = type;
   renderLogs(searchInput.value);
-}
+};
 
 // --- Show/Hide Columns ---
-function toggleColumn(col) {
+window.toggleColumn = function(col) {
   showColumns[col] = !showColumns[col];
   renderLogs(searchInput.value);
-}
+};
 
 // --- Bulk Delete ---
-function bulkDelete() {
-  if (selectedIds.size === 0) return alert("No transactions selected.");
+window.bulkDelete = function() {
+  if (selectedIds.size === 0) return showToast("No transactions selected.", false);
   if (!confirm("Delete selected transactions?")) return;
+  pushUndo(transactions);
   transactions = transactions.filter(tx => !selectedIds.has(tx.id));
   selectedIds.clear();
-  saveTransactions();
+  storage.saveTransactions(transactions);
   renderLogs(searchInput.value);
   updateSummary();
-  updateChart();
-}
+  updateCharts(transactions);
+};
 
 // --- Transaction Details Modal ---
-function showDetails(id) {
+window.showDetails = function(id) {
   const tx = transactions.find(t => t.id === id);
   if (!tx) return;
   let modal = document.getElementById("detailsModal");
@@ -310,72 +278,56 @@ function showDetails(id) {
     <div><b>Pinned:</b> ${pinnedIds.includes(tx.id) ? "Yes" : "No"}</div>
   `;
   new bootstrap.Modal(modal).show();
-}
-
-// --- Animated Counter for Summary Cards ---
-function animateCounter(id, end) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  let start = 0;
-  const duration = 600;
-  const step = Math.ceil(end / (duration / 16));
-  function update() {
-    start += step;
-    if (start >= end) {
-      el.textContent = end.toFixed(2);
-      return;
-    }
-    el.textContent = start.toFixed(2);
-    requestAnimationFrame(update);
-  }
-  update();
-}
+};
 
 // --- Delete a transaction (with undo support) ---
-function deleteTransaction(id) {
+window.deleteTransaction = function(id) {
+  pushUndo(transactions);
   lastDeleted = transactions.find(tx => tx.id === id);
   transactions = transactions.filter(tx => tx.id !== id);
-  saveTransactions();
+  storage.saveTransactions(transactions);
   renderLogs(searchInput.value);
   updateSummary();
-  updateChart();
+  updateCharts(transactions);
   const undoBtn = document.getElementById("undoBtn");
   if (undoBtn) undoBtn.style.display = "inline-block";
   playDeleteSound();
   if (window.navigator.vibrate) window.navigator.vibrate(80);
-}
+};
 
 // --- Undo last delete ---
-function undoDelete() {
-  if (lastDeleted) {
-    transactions.push(lastDeleted);
-    saveTransactions();
+window.undoDelete = function() {
+  const prev = popUndo();
+  if (prev) {
+    transactions = prev;
+    storage.saveTransactions(transactions);
     renderLogs(searchInput.value);
     updateSummary();
-    updateChart();
+    updateCharts(transactions);
     lastDeleted = null;
     const undoBtn = document.getElementById("undoBtn");
     if (undoBtn) undoBtn.style.display = "none";
   }
-}
+};
 
 // --- Clear all logs ---
-function clearLogs() {
+window.clearLogs = function() {
   if (confirm("Are you sure you want to clear all logs?")) {
+    pushUndo(transactions);
     transactions = [];
-    saveTransactions();
+    storage.saveTransactions(transactions);
     renderLogs();
     updateSummary();
-    updateChart();
+    updateCharts(transactions);
   }
-}
+};
 
 // --- Update summary cards ---
 function updateSummary() {
   const debited = transactions.filter(tx => tx.type === "debited").reduce((a, b) => a + b.amount, 0);
   const credited = transactions.filter(tx => tx.type === "credited").reduce((a, b) => a + b.amount, 0);
-  if (totalDebited) animateCounter("totalDebited", debited);
-  if (totalCredited) animateCounter("totalCredited", credited);
+  if (totalDebited) totalDebited.textContent = debited.toFixed(2);
+  if (totalCredited) totalCredited.textContent = credited.toFixed(2);
   if (document.getElementById("totalCount")) {
     document.getElementById("totalCount").textContent = transactions.length;
   }
@@ -403,52 +355,34 @@ function showSMSPreview(tx) {
       <small>${tx.time}</small>
     </div>
   `;
-  smsPreview.classList.add("animate");
-  setTimeout(() => smsPreview.classList.remove("animate"), 500);
+  animateSMSPreview();
 }
 
 // --- Copy SMS preview to clipboard ---
-function copyPreview() {
+window.copyPreview = function() {
   const temp = document.createElement("textarea");
   temp.value = smsPreview.innerText;
   document.body.appendChild(temp);
   temp.select();
   document.execCommand("copy");
   document.body.removeChild(temp);
-}
+  showToast("Copied to clipboard!");
+};
 
 // --- Search input event ---
 searchInput.addEventListener("input", () => {
   renderLogs(searchInput.value);
 });
 
+// --- Date Range Filter ---
+window.filterByDate = function() {
+  const from = new Date(document.getElementById("dateFrom").value);
+  const to = new Date(document.getElementById("dateTo").value);
+  renderLogs(searchInput.value, from, to);
+};
+
 // --- Chart.js Bar Chart ---
-function initChart() {
-  if (!transactionChartCanvas) return;
-  chart = new Chart(transactionChartCanvas, {
-    type: "bar",
-    data: {
-      labels: ["Debited", "Credited"],
-      datasets: [{
-        label: "Amount",
-        data: [0, 0],
-        backgroundColor: ["#dc3545", "#28a745"]
-      }]
-    },
-    options: {
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
-    }
-  });
-  updateChart();
-}
-function updateChart() {
-  if (!chart) return;
-  const debited = transactions.filter(tx => tx.type === "debited").reduce((a, b) => a + b.amount, 0);
-  const credited = transactions.filter(tx => tx.type === "credited").reduce((a, b) => a + b.amount, 0);
-  chart.data.datasets[0].data = [debited, credited];
-  chart.update();
-}
+initCharts(transactionChartCanvas, pieChartCanvas);
 
 // --- Helper to determine badge color ---
 function getBadgeClass(status) {
@@ -458,37 +392,54 @@ function getBadgeClass(status) {
 }
 
 // --- CSV Export ---
-function exportToCSV() {
+window.exportToCSV = function() {
+  showSpinner(true);
   let csv = "Name,Bank,Amount,Type,UserType,Status,Time\n";
   transactions.forEach(tx => {
     csv += `${tx.name},${tx.bank},${tx.amount},${tx.type},${tx.userType},${tx.status},${tx.time}\n`;
   });
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   saveAs(blob, "transactions.csv");
-}
+  setTimeout(() => showSpinner(false), 800);
+};
 
 // --- Export as PDF (requires jsPDF) ---
-function exportToPDF() {
+window.exportToPDF = function() {
   if (typeof jsPDF === "undefined") {
-    alert("jsPDF library not loaded!");
+    showToast("jsPDF library not loaded!", false);
     return;
   }
-  const doc = new jsPDF();
-  doc.text("Transaction Logs", 10, 10);
-  let y = 20;
-  transactions.forEach(tx => {
-    doc.text(
-      `Name: ${tx.name}, Bank: ${tx.bank}, Amount: ${tx.amount}, Type: ${tx.type}, User: ${tx.userType}, Status: ${tx.status}, Time: ${tx.time}`,
-      10, y
-    );
-    y += 8;
-    if (y > 270) {
-      doc.addPage();
-      y = 20;
-    }
-  });
-  doc.save("transactions.pdf");
-}
+  showSpinner(true);
+  setTimeout(() => {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Transaction Logs", 10, 15);
+    doc.setFontSize(10);
+    let y = 25;
+    transactions.forEach((tx, i) => {
+      doc.text(
+        [
+          `#${i + 1}`,
+          `Name: ${tx.name}`,
+          `Bank: ${tx.bank}`,
+          `Amount: ₹${tx.amount}`,
+          `Type: ${tx.type}`,
+          `User: ${tx.userType}`,
+          `Status: ${tx.status}`,
+          `Time: ${tx.time}`
+        ].join(" | "),
+        10, y
+      );
+      y += 8;
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+    });
+    doc.save("transactions.pdf");
+    showSpinner(false);
+  }, 500);
+};
 
 // --- Keyboard Shortcuts ---
 document.addEventListener("keydown", (e) => {
@@ -502,7 +453,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.ctrlKey && e.key.toLowerCase() === "b") {
     e.preventDefault();
-    bulkDelete();
+    window.bulkDelete();
   }
 });
 
@@ -512,11 +463,17 @@ function playDeleteSound() {
   audio.play();
 }
 
-// --- Initialize on load ---
+// --- Multi-language (i18n) support ---
+langSelect.addEventListener("change", function() {
+  applyI18n(this.value);
+});
+
+// --- On load ---
 window.addEventListener("load", () => {
   applyThemeFromStorage();
+  loadTemplates();
   renderLogs();
   updateSummary();
-  initChart();
-  initPieChart();
+  updateCharts(transactions);
+  applyI18n(langSelect.value);
 });
