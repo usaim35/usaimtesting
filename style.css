@@ -6,6 +6,13 @@ body {
   animation: gradientBG 18s ease infinite;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   transition: background 0.3s, color 0.3s;
+  color: #e0e0e0;
+}
+
+@keyframes gradientBG {
+  0% {background-position: 0% 50%;}
+  50% {background-position: 100% 50%;}
+  100% {background-position: 0% 50%;}
 }
 
 /* Animated Glassy Navbar */
@@ -56,7 +63,7 @@ body {
 .card {
   border: none;
   border-radius: 16px;
-  background: rgba(36, 37, 42, 0.92);
+  background: rgba(36, 37, 42, 0.96);
   box-shadow: 0 6px 32px 0 rgba(46,54,80,0.18);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -66,7 +73,7 @@ body {
 
 .card:hover {
   box-shadow: 0 12px 40px 0 rgba(46,54,80,0.28);
-  background: rgba(36, 37, 42, 0.98);
+  background: rgba(36, 37, 42, 1);
 }
 
 .card-header {
@@ -81,36 +88,32 @@ body {
 }
 
 .card-body {
-  padding: 1.1rem 1.2rem 1.2rem 1.2rem;
+  padding: 1rem 1.1rem 1.1rem 1.1rem;
 }
 
 /* Form & Inputs */
-.form-floating > .form-control,
-.form-floating > .form-select {
-  padding-top: 1.1rem;
-  padding-bottom: 0.4rem;
-  min-height: 44px;
+.form-label {
   font-size: 1rem;
+  color: #26d0ce;
+  font-weight: 500;
+  margin-bottom: 0.2rem;
+}
+.form-control, .form-select {
+  font-size: 1rem;
+  padding: 0.35rem 0.75rem;
   border-radius: 8px;
   border: 1.5px solid #2a5298;
   background: rgba(255,255,255,0.08);
   color: #e0e0e0;
   box-shadow: none;
+  margin-bottom: 0.7rem;
   transition: border 0.2s, background 0.2s;
-}
-.form-floating > label {
-  padding: 0.5rem 0.75rem;
-  color: #b0b8c1;
-  font-size: 1rem;
 }
 .form-control:focus, .form-select:focus {
   border-color: #26d0ce;
   box-shadow: 0 0 0 2px #26d0ce33;
   background: rgba(38,208,206,0.08);
   color: #fff;
-}
-.form-control, .form-select {
-  margin-bottom: 0.5rem;
 }
 button {
   font-weight: 600;
@@ -147,7 +150,7 @@ button {
   text-align: center;
   font-size: 15px;
   color: #e0e0e0;
-  background: rgba(36, 37, 42, 0.92);
+  background: rgba(36, 37, 42, 0.96);
 }
 
 .table-hover tbody tr:hover {
@@ -242,7 +245,7 @@ button {
 }
 
 .dark-mode .card {
-  background: rgba(36, 37, 42, 0.98);
+  background: rgba(36, 37, 42, 1);
   color: #e0e0e0;
   box-shadow: 0 8px 32px 0 rgba(31,38,135,0.18);
 }
@@ -280,7 +283,7 @@ button {
 }
 
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 992px) {
   .card-body {
     padding: 0.7rem 0.5rem 0.8rem 0.5rem;
   }
@@ -294,4 +297,22 @@ button {
   .card-header {
     padding: 0.5rem 0.8rem;
   }
+  .table th, .table td {
+    font-size: 13px;
+    padding: 0.4rem;
+  }
+}
+
+/* Extra: Hide scrollbars for a cleaner look */
+body, .card, .table-responsive {
+  scrollbar-width: thin;
+  scrollbar-color: #26d0ce #232526;
+}
+body::-webkit-scrollbar, .card::-webkit-scrollbar, .table-responsive::-webkit-scrollbar {
+  width: 8px;
+  background: #232526;
+}
+body::-webkit-scrollbar-thumb, .card::-webkit-scrollbar-thumb, .table-responsive::-webkit-scrollbar-thumb {
+  background: #26d0ce;
+  border-radius: 8px;
 }
