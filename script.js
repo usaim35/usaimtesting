@@ -10,6 +10,7 @@ const toast = new bootstrap.Toast(document.getElementById("toast"));
 let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
 let chart;
 let pieChart;
+let lastDeleted = null; // For undo feature
 
 // Confetti Animation
 function showConfetti() {
@@ -138,6 +139,25 @@ smsForm.addEventListener("submit", (e) => {
   updateSummary();
   updateChart();
   showSMSPreview(newTransaction);
+
+  // --- Auto-download as .txt file (Notepad) ---
+  const txtContent =
+    `Name: ${newTransaction.name}\n` +
+    `Bank: ${newTransaction.bank}\n` +
+    `Amount: ${newTransaction.amount}\n` +
+    `Type: ${newTransaction.type}\n` +
+    `User Type: ${newTransaction.userType}\n` +
+    `Status: ${newTransaction.status}\n` +
+    `Time: ${newTransaction.time}\n`;
+
+  const blob = new Blob([txtContent], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `transaction_${newTransaction.id}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
   toast.show();
   showConfetti();
   document.getElementById("smsSound").play();
@@ -175,13 +195,31 @@ function renderLogs(filter = "") {
   });
 }
 
-// Delete a transaction
+// Delete a transaction (with undo support)
 function deleteTransaction(id) {
+  lastDeleted = transactions.find(tx => tx.id === id);
   transactions = transactions.filter(tx => tx.id !== id);
   saveTransactions();
   renderLogs(searchInput.value);
   updateSummary();
   updateChart();
+  // Show undo button if present
+  const undoBtn = document.getElementById("undoBtn");
+  if (undoBtn) undoBtn.style.display = "inline-block";
+}
+
+// Undo last delete
+function undoDelete() {
+  if (lastDeleted) {
+    transactions.push(lastDeleted);
+    saveTransactions();
+    renderLogs(searchInput.value);
+    updateSummary();
+    updateChart();
+    lastDeleted = null;
+    const undoBtn = document.getElementById("undoBtn");
+    if (undoBtn) undoBtn.style.display = "none";
+  }
 }
 
 // Clear all logs
@@ -201,6 +239,24 @@ function updateSummary() {
   const credited = transactions.filter(tx => tx.type === "credited").reduce((a, b) => a + b.amount, 0);
   if (totalDebited) totalDebited.textContent = debited.toFixed(2);
   if (totalCredited) totalCredited.textContent = credited.toFixed(2);
+
+  // Total transaction count
+  if (document.getElementById("totalCount")) {
+    document.getElementById("totalCount").textContent = transactions.length;
+  }
+
+  // Animated progress bar (debited vs credited)
+  const debitedCount = transactions.filter(tx => tx.type === "debited").length;
+  const creditedCount = transactions.filter(tx => tx.type === "credited").length;
+  const total = debitedCount + creditedCount;
+  const debitedPercent = total ? (debitedCount / total) * 100 : 50;
+  const creditedPercent = total ? (creditedCount / total) * 100 : 50;
+  if (document.getElementById("debitedBar") && document.getElementById("creditedBar")) {
+    document.getElementById("debitedBar").style.width = debitedPercent + "%";
+    document.getElementById("creditedBar").style.width = creditedPercent + "%";
+    document.getElementById("debitedBar").textContent = `Debited (${debitedCount})`;
+    document.getElementById("creditedBar").textContent = `Credited (${creditedCount})`;
+  }
 }
 
 // Show SMS preview
@@ -215,6 +271,17 @@ function showSMSPreview(tx) {
   `;
   smsPreview.classList.add("animate");
   setTimeout(() => smsPreview.classList.remove("animate"), 500);
+}
+
+// Copy SMS preview to clipboard
+function copyPreview() {
+  const temp = document.createElement("textarea");
+  temp.value = smsPreview.innerText;
+  document.body.appendChild(temp);
+  temp.select();
+  document.execCommand("copy");
+  document.body.removeChild(temp);
+  // Optionally show a toast or alert here
 }
 
 // Search input event
