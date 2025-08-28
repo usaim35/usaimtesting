@@ -1,3 +1,4 @@
+
 /* General Reset & Theme */
 body {
   min-height: 100vh;
@@ -117,6 +118,43 @@ body {
 }
 button {
   font-weight: 600;
+}
+
+/* Tabs */
+.nav-tabs .nav-link.active {
+  background: linear-gradient(90deg, #26d0ce 0%, #8e54e9 100%);
+  color: #fff !important;
+  border: none;
+  border-radius: 8px 8px 0 0;
+}
+.nav-tabs .nav-link {
+  color: #26d0ce;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  margin-right: 2px;
+  background: rgba(36,37,42,0.7);
+  transition: background 0.2s;
+}
+.nav-tabs .nav-link:hover {
+  background: #232526;
+  color: #fff;
+}
+
+/* Spinner */
+#loadingSpinner {
+  width: 3rem;
+  height: 3rem;
+}
+
+/* Template Dropdown */
+#smsTemplate {
+  margin-bottom: 0.5rem;
+}
+
+/* Date Range Filter */
+#dateFrom, #dateTo {
+  max-width: 140px;
 }
 
 /* SMS Preview / Message Box */
@@ -280,6 +318,14 @@ button {
   background: linear-gradient(120deg, #232526 60%, #23272b 100%);
   border-color: #26d0ce;
   color: #b3e5fc;
+}
+
+/* Responsive Tabs */
+@media (max-width: 600px) {
+  .nav-tabs .nav-link {
+    font-size: 0.95rem;
+    padding: 0.4rem 0.7rem;
+  }
 }
 
 /* Responsive */
